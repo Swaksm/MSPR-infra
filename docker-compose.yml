@@ -1,0 +1,173 @@
+# Each service is built from its own cloned repository (see CLONE_ALL.md).
+# Expected layout alongside this repo:
+#   ../MSPR-backend-gateway/
+#   ../MSPR-backend-auth/
+#   ../MSPR-backend-meal/
+#   ../MSPR-backend-kcal/
+#   ../MSPR-backend-etl/
+#   ../MSPR-backend-recommendation/
+# admin/ is bundled directly inside this repo (services/admin/).
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: healthai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../MSPR-backend-etl/healthai_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d healthai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  adminer:
+    image: adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
+  etl:
+    build: ../MSPR-backend-etl
+    ports:
+      - "8002:8002"
+    volumes:
+      - ../MSPR-backend-etl:/app
+      - ../MSPR-backend-etl/data:/app/data
+      - ../MSPR-backend-etl/logs:/app/logs
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=healthai
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DATA_DIR=/app/data
+      - ETL_CRON_HOUR=3
+      - ETL_CRON_MINUTE=0
+      - ETL_SCHEDULER_ENABLED=true
+      - KAGGLE_USERNAME=${KAGGLE_USERNAME:-}
+      - KAGGLE_KEY=${KAGGLE_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  gateway:
+    build: ../MSPR-backend-gateway
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../MSPR-backend-gateway:/app
+    environment:
+      - ENV=development
+      - KCAL_SERVICE_URL=http://kcal:8001
+      - MEAL_SERVICE_URL=http://meal:8003
+      - AUTH_SERVICE_URL=http://auth:8004
+      - ETL_SERVICE_URL=http://etl:8002
+      - ADMIN_SERVICE_URL=http://admin:8005
+    depends_on:
+      - kcal
+      - meal
+      - auth
+      - etl
+      - admin
+
+  kcal:
+    build: ../MSPR-backend-kcal
+    ports:
+      - "8001:8001"
+    volumes:
+      - ../MSPR-backend-kcal:/app
+    environment:
+      - ENV=development
+    depends_on:
+      - db
+
+  meal:
+    build: ../MSPR-backend-meal
+    ports:
+      - "8003:8003"
+    volumes:
+      - ../MSPR-backend-meal:/app
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=healthai
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+    depends_on:
+      - db
+
+  auth:
+    build: ../MSPR-backend-auth
+    ports:
+      - "8004:8004"
+    volumes:
+      - ../MSPR-backend-auth:/app
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=healthai
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+    depends_on:
+      - db
+
+  admin:
+    build: ./services/admin
+    ports:
+      - "8005:8005"
+    volumes:
+      - ./services/admin:/app
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=healthai
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+    depends_on:
+      db:
+        condition: service_healthy
+
+  mongodb:
+    image: mongo:7.0
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=recommendation_db
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  recommendation:
+    build: ../MSPR-backend-recommendation
+    ports:
+      - "8006:8006"
+    volumes:
+      - ../MSPR-backend-recommendation:/app
+      - ../MSPR-backend-etl/data:/app/data
+      - recommendation_models:/app/models
+    environment:
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_DB=recommendation_db
+      - RECOMMENDATION_API_KEY=${RECOMMENDATION_API_KEY}
+      - DATA_DIR=/app/data
+      - MODELS_DIR=/app/models
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  recommendation_models:
