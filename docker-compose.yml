@@ -87,6 +87,12 @@ services:
       - ENV=development
       - KCAL_SECRET_TOKEN=${KCAL_SECRET_TOKEN}
       - HF_TOKEN=${HF_TOKEN}
+      - MEAL_SERVICE_URL=http://meal:8003
+      - VISION_PROVIDER=${VISION_PROVIDER:-huggingface}
+      - VISION_MODEL=${VISION_MODEL:-claude-haiku-4-5}
+      - VISION_MONTHLY_CAP=${VISION_MONTHLY_CAP:-5000}
+      - VISION_MAX_IMAGE_PX=${VISION_MAX_IMAGE_PX:-768}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     depends_on:
       - db
 
