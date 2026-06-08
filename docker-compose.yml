@@ -66,10 +66,13 @@ services:
     environment:
       - ENV=development
       - KCAL_SERVICE_URL=http://kcal:8001
+      - KCAL_SECRET_TOKEN=${KCAL_SECRET_TOKEN}
       - MEAL_SERVICE_URL=http://meal:8003
       - AUTH_SERVICE_URL=http://auth:8004
       - ETL_SERVICE_URL=http://etl:8002
       - ADMIN_SERVICE_URL=http://admin:8005
+      - RECOMMENDATION_SERVICE_URL=http://recommendation:8006
+      - RECOMMENDATION_API_KEY=${RECOMMENDATION_API_KEY}
     depends_on:
       - kcal
       - meal
