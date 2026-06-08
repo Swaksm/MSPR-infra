@@ -73,6 +73,7 @@ services:
       - ADMIN_SERVICE_URL=http://admin:8005
       - RECOMMENDATION_SERVICE_URL=http://recommendation:8006
       - RECOMMENDATION_API_KEY=${RECOMMENDATION_API_KEY}
+      - SOCIAL_SERVICE_URL=http://social:8007
     depends_on:
       - kcal
       - meal
@@ -178,7 +179,48 @@ services:
       mongodb:
         condition: service_healthy
 
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  social:
+    build: ../MSPR-backend-social
+    ports:
+      - "8007:8007"
+    volumes:
+      - ../MSPR-backend-social:/app
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=healthai
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_BUCKET=social-media
+      - MINIO_PUBLIC_URL=http://localhost:9000
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   mongodb_data:
   recommendation_models:
+  minio_data:
